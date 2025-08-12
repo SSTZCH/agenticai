@@ -100,23 +100,30 @@ def main():
     
     messages = [types.Content(role="user", parts=[types.Part(text=user_prompt)]),]
     
-    response = client.models.generate_content(model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt))
-    
-    if verbose:
-        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-    
-    if response.function_calls:
-        for function_call in response.function_calls:
-            function_call_result = call_function(function_call, verbose)
-            if len(function_call_result.parts) == 0:
-                raise Exception("No function_response parts!")
-            if not hasattr(function_call_result.parts[0], "function_response"):
-                raise Exception("No function_response attribute!")
-            if verbose:
-                print(f"-> {function_call_result.parts[0].function_response.response}")
-    else:
-        print(response.text)
+    for _ in range(20):
+        response = client.models.generate_content(model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt))
+        
+        for candidate in response.candidates:
+            messages.append(candidate.content)
+
+        if verbose:
+            print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+            print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+        
+        if response.function_calls:
+            for function_call in response.function_calls:
+                function_call_result = call_function(function_call, verbose)
+                result_content = types.Content(role="user", parts=function_call_result.parts)
+                messages.append(result_content)
+                if len(function_call_result.parts) == 0:
+                    raise Exception("No function_response parts!")
+                if not hasattr(function_call_result.parts[0], "function_response"):
+                    raise Exception("No function_response attribute!")
+                if verbose:
+                    print(f"-> {function_call_result.parts[0].function_response.response}")
+        else:
+            print(response.text)
+            break  # Stop looping if there are no function calls (final answer reached)
 
 if __name__ == "__main__":
     main()
